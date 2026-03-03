@@ -170,8 +170,17 @@ foreach ($config['providers'] as $i => $provider) {
     if (isset($provider['enabled']) && !$provider['enabled']) continue;
 
     $providerName = $provider['name'] ?? "provider_$i";
-    $url = rtrim($provider['baseUrl'], '/') . $path;
     $tried[] = $providerName;
+
+    // 路径映射：pathMap 中匹配则替换请求路径
+    $targetPath = $path;
+    if (!empty($provider['pathMap']) && is_array($provider['pathMap']) && isset($provider['pathMap'][$path])) {
+        $targetPath = $provider['pathMap'][$path];
+        logEvent("PATH_MAP", ['provider' => $providerName, 'from' => $path, 'to' => $targetPath]);
+        logDebug("PATH_MAP", ['provider' => $providerName, 'from' => $path, 'to' => $targetPath]);
+    }
+
+    $url = rtrim($provider['baseUrl'], '/') . $targetPath;
 
     // ── 按 provider 修改请求体 ──────────────────────────────────────────
     $providerBody = $body;

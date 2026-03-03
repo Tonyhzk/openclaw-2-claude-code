@@ -6,6 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **Per-provider path mapping** - Each provider can now define a `pathMap` to rewrite incoming request paths before forwarding, e.g. mapping `/v1/messages` to `/claude` for providers that use non-standard API paths
+
+---
+
 ## [1.1.0] - 2026-03-04
 
 ### Added
