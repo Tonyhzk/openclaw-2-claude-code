@@ -11,6 +11,8 @@
 ### 新增
 
 - **按代理商路径映射** - 每个代理商可配置 `pathMap`，在转发前将请求路径替换为目标路径，例如将 `/v1/messages` 映射为 `/claude`，适配使用非标准路径的服务商
+- **按代理商请求体注入** - 每个代理商可配置 `bodyInject`，在转发前覆盖或注入请求体字段，例如强制设置 `max_tokens` 或注入固定 `system` prompt
+- **熔断器** - 连续失败达到阈值的代理商将被临时跳过；可通过 `circuit_breaker.threshold`（默认 3 次）和 `circuit_breaker.timeout`（默认 60 秒）配置。状态持久化至 `logs/circuit.json`，恢复后自动重置
 
 ---
 

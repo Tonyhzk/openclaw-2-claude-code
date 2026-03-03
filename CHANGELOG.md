@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - **Per-provider path mapping** - Each provider can now define a `pathMap` to rewrite incoming request paths before forwarding, e.g. mapping `/v1/messages` to `/claude` for providers that use non-standard API paths
+- **Per-provider body injection** - Each provider can define a `bodyInject` map to override or inject request body fields before forwarding, e.g. forcing `max_tokens` or injecting a fixed `system` prompt
+- **Circuit breaker** - Providers that fail consecutively are temporarily skipped; configurable via `circuit_breaker.threshold` (default 3) and `circuit_breaker.timeout` in seconds (default 60). State is persisted to `logs/circuit.json` and reset automatically on recovery
 
 ---
 

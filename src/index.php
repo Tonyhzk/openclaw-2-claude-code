@@ -101,6 +101,43 @@ function logDebug($msg, $data = []) {
     @file_put_contents($logDir . '/debug.log', $entry . "\n\n", FILE_APPEND | LOCK_EX);
 }
 
+// ── 熔断器（Circuit Breaker）────────────────────────────────────────────
+$cbConfig  = $config['circuit_breaker'] ?? [];
+$cbEnabled = !empty($cbConfig['enabled']);
+$cbThresh  = (int)($cbConfig['threshold'] ?? 3);  // 触发熔断的连续失败次数
+$cbTimeout = (int)($cbConfig['timeout'] ?? 60);   // 熔断后等待恢复的秒数
+$cbFile    = __DIR__ . '/logs/circuit.json';
+$cbState   = [];
+
+function cbLoad($file) {
+    if (!file_exists($file)) return [];
+    $fp = @fopen($file, 'r');
+    if (!$fp) return [];
+    flock($fp, LOCK_SH);
+    $content = stream_get_contents($fp);
+    flock($fp, LOCK_UN);
+    fclose($fp);
+    return json_decode($content, true) ?? [];
+}
+
+function cbSave($file, $state) {
+    $dir = dirname($file);
+    if (!is_dir($dir)) @mkdir($dir, 0755, true);
+    $fp = @fopen($file, 'c+');
+    if (!$fp) return;
+    flock($fp, LOCK_EX);
+    ftruncate($fp, 0);
+    rewind($fp);
+    fwrite($fp, json_encode($state, JSON_UNESCAPED_UNICODE));
+    flock($fp, LOCK_UN);
+    fclose($fp);
+}
+
+if ($cbEnabled) {
+    $cbState = cbLoad($cbFile);
+}
+// ─────────────────────────────────────────────────────────────────────────
+
 // Debug: 每次请求写入独立文件（完整 body，不截断）
 $requestId = date('Ymd_His') . '_' . substr(uniqid(), -6);
 if ($debug) {
@@ -172,6 +209,16 @@ foreach ($config['providers'] as $i => $provider) {
     $providerName = $provider['name'] ?? "provider_$i";
     $tried[] = $providerName;
 
+    // 熔断器检查：跳过近期连续失败的 provider
+    if ($cbEnabled) {
+        $pState = $cbState[$providerName] ?? null;
+        if ($pState && $pState['failures'] >= $cbThresh && (time() - $pState['last_failure']) < $cbTimeout) {
+            logEvent("CB_SKIP", ['provider' => $providerName, 'failures' => $pState['failures']]);
+            logDebug("CB_SKIP", ['provider' => $providerName, 'failures' => $pState['failures'], 'last_failure' => $pState['last_failure']]);
+            continue;
+        }
+    }
+
     // 路径映射：pathMap 中匹配则替换请求路径
     $targetPath = $path;
     if (!empty($provider['pathMap']) && is_array($provider['pathMap']) && isset($provider['pathMap'][$path])) {
@@ -216,6 +263,16 @@ foreach ($config['providers'] as $i => $provider) {
             logEvent("THINKING_ON", ['provider' => $providerName, 'budget_tokens' => $budgetTokens]);
             logDebug("THINKING_ON", ['provider' => $providerName, 'budget_tokens' => $budgetTokens]);
         }
+    }
+
+    // 请求体字段注入：bodyInject 中的字段直接覆盖请求体对应字段
+    if (!empty($provider['bodyInject']) && is_array($provider['bodyInject']) && $bodyData) {
+        $providerBodyData = $providerBodyData ?? clone $bodyData;
+        foreach ($provider['bodyInject'] as $field => $value) {
+            $providerBodyData->$field = $value;
+        }
+        logEvent("BODY_INJECT", ['provider' => $providerName, 'fields' => array_keys($provider['bodyInject'])]);
+        logDebug("BODY_INJECT", ['provider' => $providerName, 'inject' => $provider['bodyInject']]);
     }
 
     // 有修改则统一序列化
@@ -379,6 +436,11 @@ foreach ($config['providers'] as $i => $provider) {
             }
             logEvent("STREAM_DONE", $logData);
             logDebug("STREAM_DONE", $logData);
+            // 熔断器：成功，重置失败计数
+            if ($cbEnabled && isset($cbState[$providerName])) {
+                unset($cbState[$providerName]);
+                cbSave($cbFile, $cbState);
+            }
             // Debug: 将完整响应体写入独立的响应日志文件
             if ($debug && $responseLog !== '') {
                 $resLogDir = __DIR__ . '/logs/responses';
@@ -393,6 +455,12 @@ foreach ($config['providers'] as $i => $provider) {
             $lastError = $curlErrMsg ?: "HTTP $finalCode";
             logEvent("STREAM_FAIL", ['provider' => $providerName, 'error' => $lastError]);
             logDebug("STREAM_FAIL", ['provider' => $providerName, 'code' => $finalCode, 'curl_errno' => $curlErr, 'error' => $lastError]);
+            // 熔断器：记录失败
+            if ($cbEnabled) {
+                $cbState[$providerName]['failures'] = ($cbState[$providerName]['failures'] ?? 0) + 1;
+                $cbState[$providerName]['last_failure'] = time();
+                cbSave($cbFile, $cbState);
+            }
             continue;
         }
 
@@ -426,6 +494,12 @@ foreach ($config['providers'] as $i => $provider) {
                 'error' => $lastError,
                 'response' => mb_substr($response, 0, 2000),
             ]);
+            // 熔断器：记录失败
+            if ($cbEnabled) {
+                $cbState[$providerName]['failures'] = ($cbState[$providerName]['failures'] ?? 0) + 1;
+                $cbState[$providerName]['last_failure'] = time();
+                cbSave($cbFile, $cbState);
+            }
             continue;
         }
 
@@ -434,6 +508,11 @@ foreach ($config['providers'] as $i => $provider) {
         header('Content-Type: ' . ($responseHeaders['content-type'] ?? 'application/json'));
         header('X-Provider: ' . $providerName);
         logEvent("OK", ['provider' => $providerName, 'code' => $httpCode]);
+        // 熔断器：成功，重置失败计数
+        if ($cbEnabled && isset($cbState[$providerName])) {
+            unset($cbState[$providerName]);
+            cbSave($cbFile, $cbState);
+        }
         // Debug: 记录上游响应（含完整响应体写入请求日志文件）
         logDebug("UPSTREAM_RESPONSE", [
             'provider' => $providerName,
