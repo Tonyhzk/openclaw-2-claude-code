@@ -167,6 +167,10 @@ In `openclaw.json`, set `baseUrl` to your proxy:
 claude config set apiBaseUrl https://your-proxy.example.com
 ```
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for full release history.
+
 ## License
 
-MIT
+[MIT](LICENSE)

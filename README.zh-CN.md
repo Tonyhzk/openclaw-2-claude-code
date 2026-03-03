@@ -164,6 +164,10 @@ proxy.log 示例：
 2026-03-03 20:22:57 STREAM_DONE {"provider":"ai580","code":200,"cache_usage":{"cache_creation_input_tokens":65,"cache_read_input_tokens":51566},"cache_status":"HIT(read=51566)"}
 ```
 
+## 更新日志
+
+查看 [CHANGELOG_CN.md](CHANGELOG_CN.md) 了解完整版本历史。
+
 ## License
 
-MIT
+[MIT](LICENSE)
