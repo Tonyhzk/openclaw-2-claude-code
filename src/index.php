@@ -422,7 +422,7 @@ foreach ($config['providers'] as $i => $provider) {
         $curlErr = curl_errno($ch);
         $curlErrMsg = curl_error($ch);
         $finalCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        @curl_close($ch);
 
         // 已经开始向客户端输出了，无法重试
         if ($headersSent) {
@@ -481,7 +481,7 @@ foreach ($config['providers'] as $i => $provider) {
         $curlErr = curl_errno($ch);
         $curlErrMsg = curl_error($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        @curl_close($ch);
 
         // 连接失败或 5xx → 尝试下一个
         if ($curlErr || $httpCode >= 500) {
