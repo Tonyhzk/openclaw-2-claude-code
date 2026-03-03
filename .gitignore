@@ -3,3 +3,13 @@ src/config.json
 src/logs/
 logs/
 *.log
+
+
+temp/
+0_Reference/
+0_Release/
+0_Backup/
+1_Script/
+.temp/
+.claude
+setup_claude_dir.py
