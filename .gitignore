@@ -13,3 +13,4 @@ temp/
 .temp/
 .claude
 setup_claude_dir.py
+.DS_Store
